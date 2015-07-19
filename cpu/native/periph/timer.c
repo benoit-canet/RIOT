@@ -46,7 +46,7 @@
 
 #define NATIVE_TIMER_SPEED 1000000
 
-#define NATIVE_TIMER_MIN_RES 200
+#define NEGATIVE_OFFSET_GUARD 200
 
 static unsigned long time_null;
 
@@ -98,10 +98,6 @@ static void do_timer_set(unsigned int offset)
 {
     DEBUG("%s\n", __func__);
 
-    if (offset && offset < NATIVE_TIMER_MIN_RES) {
-        offset = NATIVE_TIMER_MIN_RES;
-    }
-
     memset(&itv, 0, sizeof(itv));
     itv.it_value.tv_sec = (offset / 1000000);
     itv.it_value.tv_usec = offset % 1000000;
@@ -122,7 +118,7 @@ int timer_set(tim_t dev, int channel, unsigned int offset)
     DEBUG("%s\n", __func__);
 
     if (!offset) {
-        offset = NATIVE_TIMER_MIN_RES;
+        offset = 1;
     }
 
     do_timer_set(offset);
@@ -136,9 +132,9 @@ int timer_set_absolute(tim_t dev, int channel, unsigned int value)
     int64_t target = (int32_t)(value - now);
 
     DEBUG("timer_set_absolute(): delta=%lli\n", target);
-    if (target < 0 && target > -NATIVE_TIMER_MIN_RES) {
+    if (target < 0 && target > -NEGATIVE_OFFSET_GUARD) {
         DEBUG("timer_set_absolute(): preventing underflow.\n");
-        target = NATIVE_TIMER_MIN_RES;
+        target = 1;
     }
 
     timer_set(dev, channel, target);
@@ -214,14 +210,14 @@ unsigned int timer_read(tim_t dev)
 #ifdef __MACH__
     clock_serv_t cclock;
     mach_timespec_t mts;
-    host_get_clock_service(mach_host_self(), SYSTEM_CLOCK, &cclock);
+    host_get_clock_service(mach_host_self(), REALTIME_CLOCK, &cclock);
     clock_get_time(cclock, &mts);
     mach_port_deallocate(mach_task_self(), cclock);
     t.tv_sec = mts.tv_sec;
     t.tv_nsec = mts.tv_nsec;
 #else
 
-    if (real_clock_gettime(CLOCK_MONOTONIC, &t) == -1) {
+    if (real_clock_gettime(CLOCK_REALTIME, &t) == -1) {
         err(EXIT_FAILURE, "timer_read: clock_gettime");
     }
 
